@@ -1,0 +1,22 @@
+ARG UBUNTU_VERSION=19.04
+FROM ubuntu:${UBUNTU_VERSION}
+
+ARG INSTALL_PHANTOM_JS=true
+ARG PYTHON_VERSION="3.7"
+ARG REMOVE_DEV=false
+
+ENV BROWSER=/browser \
+    LC_ALL=en_US.UTF-8
+
+RUN echo "version" ${PYTHON_VERSION}
+COPY requirements.txt requirements.txt
+COPY Makefile Makefile
+# Install system packages
+RUN apt-get update && \
+	apt-get install -y --no-install-suggests --no-install-recommends make cmake
+RUN make install-python${PYTHON_VERSION}
+RUN make install-common-dependencies
+RUN make install-python-libs
+RUN if [ "${INSTALL_PHANTOM_JS}" = true ] ; then make install-phantomjs; fi
+RUN if [ "${REMOVE_DEV}" = true ] ; then make remove-dev-packages; fi
+
