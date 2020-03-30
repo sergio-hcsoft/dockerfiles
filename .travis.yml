@@ -1,0 +1,100 @@
+language: python
+sudo: true
+dist: bionic
+services:
+  - docker
+cache: pip
+before_cache:
+  - chown -R travis:travis $HOME/.cache/pip
+stages:
+  - build-base
+  - build-dl
+  - bump-version
+  - deploy
+before_install:
+  - env
+_install: &_install
+  - chmod +x build.sh
+_login: &_login
+  - chmod +x build.sh
+  - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD" docker.io
+
+matrix:
+  fast_finish: true
+  include:
+    - stage: build-base
+      if: commit_message !~ /^Bump version/
+      name: "Build base-python 3.6"
+      python: 3.6
+      script:
+        - ./build.sh -p "3.6" -j --tag-version travis-build
+      install: *_install
+    - stage: build-base
+      if: commit_message !~ /^Bump version/
+      name: "Build base-python 3.7"
+      python: 3.7
+      script:
+        - ./build.sh -p "3.7" -j --tag-version travis-build
+      install: *_install
+    - stage: build-dl
+      if: commit_message !~ /^Bump version/
+      name: "Build deep learning python 3.7"
+      python: 3.7
+      script:
+        - ./build.sh -p "3.7" -j -d "all" --tag deep-learning --tag-version travis-build
+      install: *_install
+    - stage: bump-version
+      if: branch == master AND type != pull_request AND commit_message !~ /^Bump version/
+      name: "Bump the version"
+      install:
+        - git config --global user.name "Fragile Bot"
+        - git config --global user.email "bot@fragile.tech"
+        - pip install bump2version
+      script:
+        - set -e
+        - git pull --no-edit origin master
+        - version_file=version.txt
+        - current_version=$(grep __version__ $version_file | cut -d\" -f2)
+        - bumpversion --tag --current-version $current_version --commit patch $version_file
+        - git remote add fragile-bot-remote https://fragile-bot:${DOCKERFILES_GITHUB_TOKEN}@github.com/$TRAVIS_REPO_SLUG
+        - git push --tags fragile-bot-remote HEAD:master
+        - set +e
+    - stage: deploy
+      if: tag =~ .*
+      name: "Push base-py36 to Docker hub"
+      install: *_login
+      script:
+        - ./build.sh -p "3.6" -j --tag-version $TRAVIS_TAG
+      deploy:
+        provider: script
+        script: make docker-push VERSION=$TRAVIS_TAG DOCKER_TAG=base-py36
+        skip_cleanup: true
+        on:
+          tags: true
+    - stage: deploy
+      if: tag =~ .*
+      name: "Push base-py37 to Docker hub"
+      install: *_login
+      script:
+        - ./build.sh -p "3.7" -j --tag-version $TRAVIS_TAG
+      deploy:
+        provider: script
+        script: make docker-push VERSION=$TRAVIS_TAG DOCKER_TAG=base-py37
+        skip_cleanup: true
+        on:
+          tags: true
+    - stage: deploy
+      if: tag =~ .*
+      name: "Push deep-learning-py37 to Docker hub"
+      install: *_login
+      script:
+        - ./build.sh -p "3.7" -j --tag-version $TRAVIS_TAG -d "all" -t "deep-learning"
+      deploy:
+        provider: script
+        script: make docker-push VERSION=$TRAVIS_TAG DOCKER_TAG=deep-learning-py37
+        skip_cleanup: true
+        on:
+          tags: true
+
+notifications:
+  email: false
