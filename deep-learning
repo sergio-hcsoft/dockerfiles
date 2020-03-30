@@ -1,0 +1,15 @@
+ARG PYTHON_VERSION="3.7"
+ARG BASE_VERSION="latest"
+FROM fragiletech/base-py${PYTHON_VERSION}:${BASE_VERSION}
+ARG INSTALL_PYTORCH=false
+ARG INSTALL_TENSORFLOW=false
+ARG REMOVE_DEV=false
+COPY Makefile Makefile
+
+RUN mkdir /root/.jupyter && \
+    echo 'c.NotebookApp.token = "'${JUPYTER_PASSWORD}'"' > /root/.jupyter/jupyter_notebook_config.py
+CMD jupyter notebook --allow-root --port 8080 --ip 0.0.0.0
+
+RUN if [ "${INSTALL_PYTORCH}" = true ] ; then make install-pytorch; fi
+RUN if [ "${INSTALL_TENSORFLOW}" = true ]  ; then make install-tf; fi
+RUN if [ "${REMOVE_DEV}" = true ] ; then make remove-dev-packages; fi
